@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>ข้อมูล</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .table-container {
+      margin-bottom: 3rem;
+    }
+    .card {
+      box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    }
+    .checkbox-center {
+      text-align: center;
+    }
+    button.btn-sm {
+      padding: 0.15rem 0.5rem;
+      font-size: 0.8rem;
+    }
+  </style>
+
+</head>
+<body class="container py-4">
+  <h1 class="mb-4 text-center">ข้อมูล</h1>
+
+  <!-- Table A -->
+  <div class="table-container">
+    <h4>Table A</h4>
+    <table class="table table-bordered">
+      <thead id="tableA-head"></thead>
+      <tbody id="tableA-tbody"></tbody>
+    </table>
+    <button class="btn btn-primary mb-3" onclick="fillSelectedToTableB()">เพิ่มข้อมูล</button>
+  </div>
+
+  <!-- Table B -->
+  <div class="table-container">
+    <h4>Table B</h4>
+    <table class="table table-bordered">
+      <thead id="tableB-head"></thead>
+      <tbody id="tableB-tbody"></tbody>
+    </table>
+  </div>
+  <div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" onclick="saveTableB()">บันทึก</button>
+  </div>
+
+  <script>
+    const sheetId = "1hN9ll_sbz5U-TvvHR5TRoGafCzHwvn6YCnOhRiUHsII"; // 🟡 Sheet ID
+    const apiKey = "AIzaSyBMfBBJHZO5QGGbCbBhzCFKyuOQCVOAQng";       // 🟡 API Key
+
+    let sheet1Headers = [], sheet1Data = [];
+    let sheet2Headers = [], sheet2Data = [];
+
+    async function loadSheet1() {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ชีต1?key=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data.values || data.values.length === 0) {
+        document.getElementById("tableA-tbody").innerHTML = "<tr><td colspan='99'>ไม่พบข้อมูล</td></tr>";
+        return;
+      }
+
+      sheet1Headers = data.values[0];
+      sheet1Data = data.values.slice(1);
+
+      const thead = document.getElementById("tableA-head");
+      const tbody = document.getElementById("tableA-tbody");
+
+      thead.innerHTML = "<tr>" +
+        sheet1Headers.map(h => `<th>${h}</th>`).join("") +
+        "<th class='checkbox-center'>เลือก</th>" +
+        "</tr>";
+
+      tbody.innerHTML = sheet1Data.map((row, i) => {
+        return "<tr>" +
+          sheet1Headers.map((_, j) => `<td>${row[j] || ""}</td>`).join("") +
+          `<td class='checkbox-center'><input type="checkbox" class="select-row" data-index="${i}"></td>` +
+          "</tr>";
+      }).join("");
+    }
+
+    async function loadSheet2() {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/ชีต2?key=${apiKey}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data.values || data.values.length === 0) {
+        document.getElementById("tableB-tbody").innerHTML = "<tr><td colspan='99'>ไม่พบข้อมูล</td></tr>";
+        return;
+      }
+
+      sheet2Headers = data.values[0];
+      sheet2Data = data.values.slice(1);
+
+      renderTableB();
+    }
+
+    function renderTableB() {
+      const tbody = document.getElementById("tableB-tbody");
+
+      tbody.innerHTML = sheet2Data.map((row, i) => {
+        return "<tr>" +
+          sheet2Headers.map((_, j) => `<td>${row[j] || ""}</td>`).join("") +
+          `<td><button class="btn btn-sm btn-danger" onclick="clearFieldsInRow(${i})">ลบ</button></td>` +
+          "</tr>";
+      }).join("");
+
+      const thead = document.getElementById("tableB-head");
+      thead.innerHTML = "<tr>" +
+        sheet2Headers.map(h => `<th>${h}</th>`).join("") +
+        "<th>จัดการ</th>" +
+        "</tr>";
+    }
+
+    function clearFieldsInRow(idx) {
+      const nmcIndexB = sheet2Headers.indexOf("NMC_CID");
+      const remarkIndexB = sheet2Headers.indexOf("REMARK");
+      if (nmcIndexB === -1 || remarkIndexB === -1) return;
+
+      sheet2Data[idx][nmcIndexB] = "";
+      sheet2Data[idx][remarkIndexB] = "";
+
+      renderTableB();
+    }
+
+    function fillSelectedToTableB() {
+      const nmcIndexA = sheet1Headers.indexOf("NMC_CID");
+      const remarkIndexA = sheet1Headers.indexOf("REMARK");
+      const nmcIndexB = sheet2Headers.indexOf("NMC_CID");
+      const remarkIndexB = sheet2Headers.indexOf("REMARK");
+
+      if (nmcIndexA === -1 || remarkIndexA === -1 || nmcIndexB === -1 || remarkIndexB === -1) {
+        alert("ไม่พบคอลัมน์ NMC_CID หรือ REMARK ในชีตใดชีตหนึ่ง");
+        return;
+      }
+
+      const checkboxes = document.querySelectorAll(".select-row:checked");
+      if (checkboxes.length === 0) {
+        alert("กรุณาเลือกแถวจากตาราง A อย่างน้อย 1 แถว");
+        return;
+      }
+
+      let selectedData = [];
+      for (let cb of checkboxes) {
+        const idx = parseInt(cb.dataset.index);
+        selectedData.push(sheet1Data[idx]);
+        if (selectedData.length >= 5) break;
+      }
+
+      let emptySlots = [];
+      for (let i = 0; i < sheet2Data.length; i++) {
+        let nmcVal = sheet2Data[i][nmcIndexB];
+        let remarkVal = sheet2Data[i][remarkIndexB];
+        if ((!nmcVal || nmcVal.trim() === "") && (!remarkVal || remarkVal.trim() === "")) {
+          emptySlots.push(i);
+        }
+      }
+
+      if (emptySlots.length === 0) {
+        alert("ไม่มีช่องว่างในตาราง B สำหรับเติมข้อมูล");
+        return;
+      }
+
+      const maxFill = Math.min(selectedData.length, emptySlots.length, 5);
+
+      for (let i = 0; i < maxFill; i++) {
+        const targetRow = emptySlots[i];
+        const sourceRow = selectedData[i];
+        sheet2Data[targetRow][nmcIndexB] = sourceRow[nmcIndexA];
+        sheet2Data[targetRow][remarkIndexB] = sourceRow[remarkIndexA];
+      }
+
+      renderTableB(); // อัปเดตตาราง B ใหม่
+
+      // ✅ รีเซ็ต checkbox ที่เลือกไว้
+      document.querySelectorAll(".select-row").forEach(cb => cb.checked = false);
+
+      alert(`เติมข้อมูลสำเร็จ ${maxFill} แถว`);
+    }
+
+    async function init() {
+      await loadSheet1(); 
+      await loadSheet2();
+    }
+   function saveTableB() {
+    const proxyUrl = "http://localhost:3000/proxy"; // เรียกผ่าน Proxy Server
+
+    console.log("🚀 กำลังส่งข้อมูล:", sheet2Data);
+
+    fetch(proxyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(sheet2Data)
+    })
+      .then(res => res.text())
+      .then(msg => {
+        alert("✅ บันทึกสำเร็จ: " + msg);
+      })
+      .catch(err => {
+        console.error("❌ บันทึกล้มเหลว:", err);
+        alert("❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      });
+  }
+
+
+    init(); // เริ่มโหลดข้อมูล
+  </script>
+</body>
+</html>
